@@ -3,11 +3,14 @@ import bisect
 import struct
 from tkinter import *
 import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
 
 list = []; #the oringin list to store the information
 list_content = [];   #proceed input information
 str = '';  # a string to store the information from every lines
 info_node = {};  # a list to store every nodes and label
+info_branch = {};
 NumnodeS = 0;   #number of nodes
 info_control_commands = {}; # information of every control command
 matrix = [[[0 for j in range(10)] for j in range(1000)] for i in range(1000)];   #the matrix that store the circuit
@@ -15,10 +18,13 @@ conversion = {'f':10**-15,'p':10**-12,'n':10**-9,'u':10**-6,'m':10**-3,'k':10**3
 matrix_nodes = [[0 for j in range(1000)] for i in range(1000)];
 matrix_source_controled = [[0 for j in range(100)] for i in range(100)];
 matrix_V = [0 for j in range(10)];
-matrix_I = [0 for j in range(10)];
-matrix_MNA = [[0 for j in range(100)] for i in range(100)];
+matrix_RHS = [0 for j in range(20)];
+lp_s = 10;
+T = 10;
+label_c = [];
+label_l = [];
 
-with open('text2.txt','r') as f:
+with open('text4.txt','r') as f:
         list = f.readlines()
 
 class Element:
@@ -51,6 +57,13 @@ class Source_controled:
         self.node_control2 = q;
         self.value = s;
 
+class Source_controled_fh:
+    def __init__(self,id,u,v,c,s):
+        self.ID = id;
+        self.node1 = u;
+        self.node2 = v;
+        self.cl = c;
+        self.value = s;
 
 class Control:
     def __init__(self,op,control):
@@ -82,6 +95,12 @@ def is_number(s):
         pass
 
     return False
+
+def find_index_of_str(s1, s2):
+    lt=s1.split(s2,1)
+    if len(lt)==1:
+        return FALSE
+    return True
 ##################################################################################
 #STORE INFORMATION                                                               #
 ###################################################################################
@@ -112,7 +131,7 @@ def draw():
                 continue;
             if(tmp == '.'):
                 if(len(list_content[i])>1):
-                    for j in range(1,len(list_content[i])):
+                    for j in range(2,len(list_content[i])):
                         list_content[i][1] += list_content[i][j]+' ';
                     elem = Control(list_content[i][0],list_content[i][1]);
                 else:
@@ -137,14 +156,17 @@ def draw():
                     while matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]!=0:
                         k = k+1;
                     if(is_number(list_content[i][3][0])==True):
-                        for j in range(5,len(list_content[i])):
-                            list_content[i][4] += list_content[i][j];
-                        elem = Source('v',list_content[i][1],list_content[i][2],list_content[i][3],list_content[i][4]);
+                        if(len(list_content[i])>4):
+                            for j in range(5,len(list_content[i])):
+                                list_content[i][4] += list_content[i][j];
+                            elem = Source(list_content[i][0],list_content[i][1],list_content[i][2],list_content[i][3],list_content[i][4]);
+                        else:
+                            elem = Source(list_content[i][0],list_content[i][1],list_content[i][2],list_content[i][3],'');
                         matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]=elem;
                     else:
                         for j in range(4,len(list_content[i])):
                             list_content[i][3] += list_content[i][j];
-                        elem = Source('v',list_content[i][1],list_content[i][2],0,list_content[i][3]);
+                        elem = Source(list_content[i][0],list_content[i][1],list_content[i][2],0,list_content[i][3]);
                         matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]=elem;
 
                 elif(tmp=='i'):
@@ -155,14 +177,14 @@ def draw():
                         if(len(list_content[i])>4):
                             for j in range(5,len(list_content[i])):
                                 list_content[i][4] += list_content[i][j];
-                            elem = Source('i',list_content[i][1],list_content[i][2],list_content[i][3],list_content[i][4]);
+                            elem = Source(list_content[i][0],list_content[i][1],list_content[i][2],list_content[i][3],list_content[i][4]);
                         else:
-                            elem = Source('i',list_content[i][1],list_content[i][2],list_content[i][3],'');
+                            elem = Source(list_content[i][0],list_content[i][1],list_content[i][2],list_content[i][3],'');
                         matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]=elem;
                     else:
                         for j in range(4,len(list_content[i])):
                             list_content[i][3] += list_content[i][j];
-                        elem = Source('i',list_content[i][1],list_content[i][2],0,list_content[i][3]);
+                        elem = Source(list_content[i][0],list_content[i][1],list_content[i][2],0,list_content[i][3]);
                         matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]=elem;
 
 
@@ -170,34 +192,47 @@ def draw():
                     k = 0;
                     while matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]!=0:
                         k = k+1;
-                    elem = Element('r',list_content[i][1],list_content[i][2],list_content[i][3]);
+                    elem = Element(list_content[i][0],list_content[i][1],list_content[i][2],list_content[i][3]);
                     matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]=elem;
                 if(tmp=='c'):
                     k = 0;
                     while matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]!=0:
                         k = k+1;
-                    elem = Element('c',list_content[i][1],list_content[i][2],list_content[i][3]);
+                    elem = Element(list_content[i][0],list_content[i][1],list_content[i][2],list_content[i][3]);
                     matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]=elem;
                 if(tmp=='l'):
                     k = 0;
                     while matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]!=0:
                         k = k+1;
-                    elem = Element('l',list_content[i][1],list_content[i][2],list_content[i][3]);
+                    elem = Element(list_content[i][0],list_content[i][1],list_content[i][2],list_content[i][3]);
                     matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]=elem;
-                if(tmp=='g'):
+                if(tmp=='g' or tmp =='e'):
                     k = 0;
                     while matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]!=0:
                         k = k+1;
-                    elem = Source_controled('g',list_content[i][1],list_content[i][2],list_content[i][3],list_content[i][4],list_content[i][5]);
+                    elem = Source_controled(list_content[i][0],list_content[i][1],list_content[i][2],list_content[i][3],list_content[i][4],list_content[i][5]);
                     matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]=elem;
 
+                if(tmp=='f' or tmp=='h'):
+                    k = 0;
+                    while matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]!=0:
+                        k = k+1;
+                    elem = Source_controled(list_content[i][0],list_content[i][1],list_content[i][2],list_content[i][3],list_content[i][4]);
+                    matrix[info_node[list_content[i][1]]][info_node[list_content[i][2]]][k]=elem;
 
 ##########################################################################################################################################
 # prepare for the cubes
 ##########################################################################################################################################
 
 def cube_ready(NumnodeS):
-    print(NumnodeS);
+    print(info_node);
+    print(info_control_commands);
+    print("num of nodes",NumnodeS);
+    label_option = option();
+    print("sssssssssssssssssssssssssssssss",label_option)
+    num_branch = 0;
+    num_c = 0;
+    num_l = 0;
     for i in range(0,NumnodeS):
             for j in range(0,NumnodeS):
                 if(matrix[i][j][0] == 0):
@@ -211,38 +246,164 @@ def cube_ready(NumnodeS):
                 k = 0;
                 while(matrix[i][j][k]!=0 and k<10):
                     tmp = matrix[i][j][k];
-                    print(tmp.ID,'TMP.ID');
-                    if(tmp.ID=='r'):
+                    print(tmp.ID[0],'TMP.ID');
+                    if(tmp.ID[0]=='r'):
                         matrix_nodes[i][j] -= 1/float(tmp.value);
-                    if(tmp.ID=='g'):
+                    if(tmp.ID[0]=='g'):
                         for p in range(0,NumnodeS):
                             for q in  range(0,NumnodeS):
                                 if((p==info_node[tmp.node1] and q==info_node[tmp.node_control1]) or (p==info_node[tmp.node2] and q==info_node[tmp.node_control2])):
-                                    matrix_source_controled[p][q] += int(tmp.value);
+                                    matrix_source_controled[p][q] += float(tmp.value);
                                     #print(p,q,matrix_source_controled[p][q]);
                                 elif((p==info_node[tmp.node2] and q==info_node[tmp.node_control1]) or (p==info_node[tmp.node1] and q==info_node[tmp.node_control2])):
-                                    matrix_source_controled[p][q] -= int(tmp.value);
+                                    matrix_source_controled[p][q] -= float(tmp.value);
                                     #print(p,q,matrix_source_controled[p][q]);
-                    if(tmp.ID=='g'):
-                        for p in range(0,NumnodeS):
-                            for q in  range(0,NumnodeS):
-                                if((p==info_node[tmp.node1] and q==info_node[tmp.node_control1]) or (p==info_node[tmp.node2] and q==info_node[tmp.node_control2])):
-                                    matrix_source_controled[p][q] += int(tmp.value);
-                                    #print(p,q,matrix_source_controled[p][q]);
-                                elif((p==info_node[tmp.node2] and q==info_node[tmp.node_control1]) or (p==info_node[tmp.node1] and q==info_node[tmp.node_control2])):
-                                    matrix_source_controled[p][q] -= int(tmp.value);
-                                    #print(p,q,matrix_source_controled[p][q]);
-                    if(tmp.ID=='i'):
-                        if(tmp.ID=='i'):
-                            matrix_I[info_node[tmp.node1]] -= int(tmp.value);
-                            matrix_I[info_node[tmp.node2]] += int(tmp.value);
+                    if(tmp.ID[0]=='i'):
+                        matrix_RHS[info_node[tmp.node1]] -= float(tmp.value);
+                        matrix_RHS[info_node[tmp.node2]] += float(tmp.value);
                         print("GOT current");
+                    if(tmp.ID[0]=='v'):
+                        str_branch = tmp.ID;
+                        info_branch.update({str_branch:num_branch});
+                        num_branch = num_branch+1;
+                        ord = NumnodeS + info_branch[str_branch];
+                        matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                        matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                        matrix_nodes[ord][info_node[tmp.node1]] += 1;
+                        matrix_nodes[ord][info_node[tmp.node2]] -= 1;
+                        matrix_RHS[ord]  += float(tmp.value);
+                        print("GOT voltage" ,ord);
+                    if(tmp.ID[0]=='c'):
+                        if label_option==0:
+                            str_branch = tmp.ID;
+                            info_branch.update({str_branch:num_branch});
+                            num_branch = num_branch+1;
+                            ord = NumnodeS + info_branch[str_branch];
+                            matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                            matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                            matrix_nodes[ord][info_node[tmp.node1]] += float(tmp.value)*lp_s;
+                            matrix_nodes[ord][info_node[tmp.node2]] -= float(tmp.value)*lp_s;
+                            matrix_nodes[ord][ord] -= 1;
+                            tmpmatrix = [ord,float(tmp.value),info_node[tmp.node1],info_node[tmp.node2]]
+                            label_c.append(tmpmatrix);
+                            num_c += 1;
+                            print("GOT C" ,ord);
+                        elif label_option==1:
+                            str_branch = tmp.ID;
+                            info_branch.update({str_branch:num_branch});
+                            num_branch = num_branch+1;
+                            ord = NumnodeS + info_branch[str_branch];
+                            matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                            matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                            matrix_nodes[ord][ord] += 1;
+                            tmpmatrix = [ord,float(tmp.value),info_node[tmp.node1],info_node[tmp.node2]]
+                            label_c.append(tmpmatrix);
+                            num_c += 1;
+                            print("GOT C" ,ord);
+                        elif label_option==2:
+                            str_branch = tmp.ID;
+                            info_branch.update({str_branch:num_branch});
+                            num_branch = num_branch+1;
+                            ord = NumnodeS + info_branch[str_branch];
+                            matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                            matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                            matrix_nodes[ord][info_node[tmp.node1]] += 2*float(tmp.value)*lp_s;
+                            matrix_nodes[ord][info_node[tmp.node2]] -= 2*float(tmp.value)*lp_s;
+                            matrix_nodes[ord][ord] -= 1;
+                            tmpmatrix = [ord,float(tmp.value),info_node[tmp.node1],info_node[tmp.node2]]
+                            label_c.append(tmpmatrix);
+                            num_c += 1;
+                            print("GOT C" ,ord);
+
+                    if(tmp.ID[0]=='l'):
+                        if label_option==0:
+                            str_branch = tmp.ID;
+                            info_branch.update({str_branch:num_branch});
+                            num_branch = num_branch+1;
+                            ord = NumnodeS + info_branch[str_branch];
+                            matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                            matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                            matrix_nodes[ord][info_node[tmp.node1]] += 1;
+                            matrix_nodes[ord][info_node[tmp.node2]] -= 1;
+                            matrix_nodes[ord][ord] -= lp_s * float(tmp.value);
+                            tmpmatrix = [ord,float(tmp.value),info_node[tmp.node1],info_node[tmp.node2]]
+                            label_l.append(tmpmatrix);
+                            num_l += 1;
+                            print("GOT L" ,ord);
+                        elif label_option==1:
+                            str_branch = tmp.ID;
+                            info_branch.update({str_branch:num_branch});
+                            num_branch = num_branch+1;
+                            ord = NumnodeS + info_branch[str_branch];
+                            matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                            matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                            matrix_nodes[ord][ord] += 1;
+                            tmpmatrix = [ord,float(tmp.value),info_node[tmp.node1],info_node[tmp.node2]]
+                            label_l.append(tmpmatrix);
+                            num_l += 1;
+                            print("GOT L" ,ord);
+                        elif label_option==2:
+                            str_branch = tmp.ID;
+                            info_branch.update({str_branch:num_branch});
+                            num_branch = num_branch+1;
+                            ord = NumnodeS + info_branch[str_branch];
+                            matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                            matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                            matrix_nodes[ord][info_node[tmp.node1]] += 2*float(tmp.value)*lp_s;
+                            matrix_nodes[ord][info_node[tmp.node2]] -= 2*float(tmp.value)*lp_s;
+                            matrix_nodes[ord][ord] -= 1;
+                            tmpmatrix = [ord,float(tmp.value),info_node[tmp.node1],info_node[tmp.node2]]
+                            label_l.append(tmpmatrix);
+                            num_l += 1;
+                            print("GOT L" ,ord);
+                    if(tmp.ID[0]=='e'):
+                        str_branch = tmp.ID;
+                        info_branch.update({str_branch:num_branch});
+                        num_branch = num_branch+1;
+                        ord = NumnodeS + info_branch[str_branch];
+                        matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                        matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                        matrix_nodes[ord][info_node[tmp.node1]] += 1;
+                        matrix_nodes[ord][info_node[tmp.node2]] -= 1;
+                        matrix_nodes[ord][info_node[tmp.node_control1]] -= float(tmp.value);
+                        matrix_nodes[ord][info_node[tmp.node_control2]] += float(tmp.value);
+                        print("GOT  Evoltage" ,ord);
+                    if(tmp.ID[0]=='f'):
+                        str_branch = tmp.ID;
+                        info_branch.update({str_branch:num_branch});
+                        num_branch = num_branch+1;
+                        ord = NumnodeS + info_branch[str_branch];
+                        matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                        matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                        matrix_nodes[ord][info_node[tmp.node1]] += 1;
+                        matrix_nodes[ord][info_node[tmp.node2]] -= 1;
+                        matrix_nodes[ord][info_node[tmp.node_control1]] -= float(tmp.value);
+                        matrix_nodes[ord][info_node[tmp.node_control2]] += float(tmp.value);
+                        matrix_RHS[ord]  += 0;
+                        print("GOT  FCURRENT" ,ord);
+                    if(tmp.ID[0]=='h'):
+                        str_branch = tmp.ID;
+                        info_branch.update({str_branch:num_branch});
+                        info_branch.update({str_branch+'CC':num_branch+1});
+                        num_branch = num_branch+2;
+                        ord = NumnodeS + info_branch[str_branch];
+                        matrix_nodes[info_node[tmp.node1]][ord] += 1;
+                        matrix_nodes[info_node[tmp.node2]][ord] -= 1;
+                        matrix_nodes[ord][info_node[tmp.node1]] += 1;
+                        matrix_nodes[ord][info_node[tmp.node2]] -= 1;
+                        matrix_nodes[ord][info_node[tmp.node_control1]] += 1;
+                        matrix_nodes[ord][info_node[tmp.node_control2]] -= 1;
+                        matrix_nodes[info_node[tmp.node_control1]][ord] += 1;
+                        matrix_nodes[info_node[tmp.node_control2]][ord] -= 1;
+                        matrix_nodes[ord][ord+1] -= float(tmp.value);
+                        matrix_RHS[ord]  += 0;
+                        print("GOT  Hvoltage" ,ord);
                     k = k+1;
             if(matrix[j][i][0]!=0):
                 k = 0;
                 while(matrix[j][i][k]!=0 and k<10):
                     tmp = matrix[j][i][k];
-                    if(tmp.ID=='r'):
+                    if(tmp.ID[0]=='r'):
                         matrix_nodes[i][j] -= 1/float(tmp.value);
                     k = k+1;
             if(i!=j):
@@ -256,39 +417,99 @@ def cube_ready(NumnodeS):
             print(matrix_nodes[i][j], end=' ');
         print('\n');
     print('######################################\n######################################');
-    print('the cube of I:');
+    print('the cube of RHS:');
     for i in  range(0,NumnodeS):
-        print(matrix_I[i], end=' ');
+        print(matrix_RHS[i], end=' ');
     print('\n');
 
 ##################################################################################################
 # START TO CACULATE
 ##################################################################################################
 def caclulater(NumnodeS):
+    print("num of branch",info_branch);
     gnd = int(info_node['0']);
-    print("START TO CACULATE",gnd);
-    matrix_I_to_ca = matrix_I[:gnd]+matrix_I[gnd+1:NumnodeS];
-    matrix_nodes_to_ca = matrix_nodes[:gnd]+matrix_nodes[gnd+1:NumnodeS];
-    for i in range(0,NumnodeS-1):
-        matrix_nodes_to_ca[i]=matrix_nodes_to_ca[i][:gnd]+matrix_nodes_to_ca[i][gnd+1:NumnodeS];
-    print('the cube of I for caculate:');
-    for i in range(0,NumnodeS-1):
-        print(matrix_I_to_ca[i], end=' ');
-    print('\n');
+    extra_branch = len(info_branch);
+    print("START TO CACULATE",gnd ,"len(branch)",extra_branch);
+    matrix_RHS_to_ca = matrix_RHS[:gnd]+matrix_RHS[gnd+1:NumnodeS+extra_branch];
+    matrix_nodes_to_ca = matrix_nodes[:gnd]+matrix_nodes[gnd+1:NumnodeS+extra_branch];
+    for i in range(0,NumnodeS+extra_branch-1):
+        matrix_nodes_to_ca[i]=matrix_nodes_to_ca[i][:gnd]+matrix_nodes_to_ca[i][gnd+1:NumnodeS+extra_branch];
     print("the cube of the circuit to caculate:")
-    for i in range(0,NumnodeS-1):
-        for j in  range(0,NumnodeS-1):
+    for i in range(0,NumnodeS+extra_branch-1):
+        for j in  range(0,NumnodeS+extra_branch-1):
             print(matrix_nodes_to_ca[i][j], end=' ');
         print('\n');
+    print('the oringin cube of RHS for caculate:');
+    for i in range(0,NumnodeS+extra_branch-1):
+        print(matrix_RHS_to_ca[i], end=' ');
+    print('\n');
+    option()
+    if len(label_c) or len(label_l):
+        t = 0;
+        matrix_res = [];
+        matrix_t = [];
+        matrix_t.append(0)
+        matrix_res.append(0)
+        res = [0 for j in range(NumnodeS+extra_branch)]
+        for i in range(0,lp_s):
+            t += T/lp_s;
+            if len(label_c):
+                for p in range(0,len(label_c)):
+                    matrix_RHS_to_ca[label_c[p][0]-1] += label_c[p][1]*lp_s*(res[label_c[p][2]]-res[label_c[p][3]])
+            if len(label_l):
+                for q in range(0,len(label_l)):
+                    matrix_RHS_to_ca[label_l[q][0]-1] -= label_l[q][1]*lp_s*(res[label_l[q][2]]-res[label_l[q][3]])
+                    print("....................................",matrix_RHS_to_ca,res[label_c[p][0]-1])
+            a = np.array(matrix_nodes_to_ca);
+            b = np.array(matrix_RHS_to_ca);
+            #print(b)
+            res = np.linalg.solve(a,b);
+            print(res)
+            matrix_res.append(res[NumnodeS+1]);
+            matrix_t.append(t);
+            for p in range(0,len(label_c)):
+                matrix_RHS_to_ca[label_c[p][0]-1] = 0
+            for q in range(0,len(label_l)):
+                matrix_RHS_to_ca[label_l[q][0]-1] = 0
+        plt.plot(matrix_t,matrix_res) # pyplot.plot()
+        plt.show();
 
-    a = np.array(matrix_nodes_to_ca);
-    b = np.array(matrix_I_to_ca);
-    res = np.linalg.solve(a,b);
-    print(res);
+        #print("matrix_res",matrix_res);
+
+
+    else:
+        print('the cube of RHS for caculate:');
+        for i in range(0,NumnodeS+extra_branch-1):
+            print(matrix_RHS_to_ca[i], end=' ');
+        print('\n');
+        print("the cube of the circuit to caculate:")
+        for i in range(0,NumnodeS+extra_branch-1):
+            for j in  range(0,NumnodeS+extra_branch-1):
+                print(matrix_nodes_to_ca[i][j], end=' ');
+            print('\n');
+
+        a = np.array(matrix_nodes_to_ca);
+        b = np.array(matrix_RHS_to_ca);
+        res = np.linalg.solve(a,b);
+        print(res);
 
 
 
-
+##################################################################################################
+# option
+##################################################################################################
+def option():
+    label = 0
+    if len(info_control_commands):
+        for key in info_control_commands:
+            if key=='.option':
+                if find_index_of_str(info_control_commands[key],'be'):
+                    label = 0
+                if find_index_of_str(info_control_commands[key],'de'):
+                    label = 1
+                if find_index_of_str(info_control_commands[key],'tr'):
+                    label = 2
+    return label
 ##################################################################################################
 # main
 ##################################################################################################
@@ -298,8 +519,7 @@ def main():
         NumnodeS = draw();
         cube_ready(NumnodeS);
         caclulater(NumnodeS);
-        print(info_node);
-        print(info_control_commands);
+
 
 #################################################################################################
 #GUI
@@ -317,7 +537,6 @@ class MY_GUI():
         self.result_data_label = Label(self.init_window_name, text="输出结果")
         self.result_data_label.grid(row=0, column=12)
         self.init_data_Text = Text(self.init_window_name, width=67, height=35)
-
         self.init_data_Text.grid(row=1, column=0, rowspan=10, columnspan=10)
         self.result_data_Text = Text(self.init_window_name, width=70, height=35)
         self.result_data_Text.grid(row=1, column=12, rowspan=15, columnspan=10)
